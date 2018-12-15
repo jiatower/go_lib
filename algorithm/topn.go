@@ -3,6 +3,7 @@ package topn
 import "container/heap"
 
 //Less 是需要实现的比较函数
+//
 type Less func(small interface{}, big interface{}) bool
 
 type GenHeap struct {
