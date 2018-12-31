@@ -3,7 +3,8 @@ package utils
 import (
 	"encoding/json"
 	"errors"
-	"yh_pkg/net/http"
+
+	"github.com/jiatower/go_lib/net/http"
 )
 
 const (

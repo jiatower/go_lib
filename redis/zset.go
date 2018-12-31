@@ -3,7 +3,8 @@ package redis
 import (
 	"errors"
 	"fmt"
-	"yh_pkg/utils"
+
+	"github.com/jiatower/go_lib/utils"
 )
 
 type ItemScore struct {

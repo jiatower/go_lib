@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
-	"yh_pkg/utils"
+
+	"github.com/jiatower/go_lib/utils"
 )
 
 const MAX_PS = 1000
@@ -88,7 +89,6 @@ func (hr *HttpRequest) ParseOpt(params ...interface{}) error {
 			} else {
 				*ref = utils.ToString(params[i+2])
 			}
-
 		case *float64:
 			if ok {
 				*ref, e = utils.ToFloat64(v)
@@ -186,6 +186,8 @@ func (hr *HttpRequest) Parse(params ...interface{}) error {
 				*ref, e = utils.ToFloat64(v)
 			case *int:
 				*ref, e = utils.ToInt(v)
+			case *uint8:
+				*ref, e = utils.ToUint8(v)
 			case *uint16:
 				*ref, e = utils.ToUint16(v)
 			case *uint32:
@@ -249,6 +251,8 @@ func (hr *HttpRequest) ParseGet(params ...interface{}) error {
 				*ref, e = utils.ToFloat64(v)
 			case *int:
 				*ref, e = utils.ToInt(v)
+			case *uint8:
+				*ref, e = utils.ToUint8(v)
 			case *uint16:
 				*ref, e = utils.ToUint16(v)
 			case *uint32:

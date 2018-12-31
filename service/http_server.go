@@ -19,9 +19,9 @@ import (
 	"reflect"
 	"strings"
 	"time"
-	"yh_pkg/log"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/jiatower/go_lib/log"
 )
 
 type Server struct {
@@ -71,12 +71,7 @@ func (server *Server) StartService() error {
 	handler := http.NewServeMux()
 	//用户验证
 	handler.HandleFunc("/s/", server.secureHandler)
-	//用户验证+集群绑定验证
-	handler.HandleFunc("/sc/", server.secureHandler)
-	//用户验证+集群绑定+管理员
-	handler.HandleFunc("/sca/", server.secureHandler)
 	handler.HandleFunc("/", server.nonSecureHandler)
-	handler.HandleFunc("/stream", server.nonSecureHandler)
 	s := &http.Server{
 		Addr:           server.conf.IpPort,
 		Handler:        handler,
@@ -138,13 +133,6 @@ func (server *Server) writeBack(r *http.Request, w http.ResponseWriter, reqBody 
 	if !success {
 		server.sysLog.Append(l, log.ERROR)
 	}
-
-	url := r.URL.String()
-	//配置不需要在System.debug.log中打印的url
-	ex_url_map := map[string]interface{}{"/sc/storage/Punch": "", "/s/p2p_storage/ListUpdatedFiles": "", "/s/p2p_storage/Report": "", "/s/p2p_storage/GetDelegates": "", "/s/p2p_storage/UpdateNode": "", "/s/p2p_storage/UpdateNode2": "", "/sys_test/ErrorReport": "", "/sys_test/TimeoutRequest": "", "/sys_test/ReportLog": "", "/s/p2p_storage/Download": ""}
-	if _, exist := ex_url_map[url]; exist {
-		return
-	}
 	server.sysLog.Append(l, log.DEBUG)
 
 }
@@ -161,27 +149,7 @@ func (server *Server) secureHandler(w http.ResponseWriter, r *http.Request) {
 			fields := strings.Split(r.URL.Path[1:], "/")
 			if len(fields) >= 3 {
 				pre_url := fields[0]
-				if pre_url == "sc" || pre_url == "sca" {
-					isOk, e := server.conf.CheckClusterUser(r, s)
-					if e == nil {
-						if isOk {
-							if pre_url == "sc" {
-								body, err = server.handleRequest(fields[1], "Sc"+fields[2], s, r, &result)
-							} else {
-								if s.IsAdmin || s.IsSuperAdmin {
-									body, err = server.handleRequest(fields[1], "Sca"+fields[2], s, r, &result)
-								} else {
-									err = NewError(ERR_PERMISSION_DENIED, "no permission: "+r.URL.Path)
-								}
-							}
-						} else {
-							err = NewError(ERR_BINDDEV_INVALID, "not bind storage, or cluster_user is no ok: "+r.URL.Path)
-						}
-					} else {
-						err = e
-						result.Res = map[string]interface{}{"appid": s.AppId, "appuid": s.AppUid, "cluster": s.Cluster, "bind_tm": s.BindTm}
-					}
-				} else if pre_url == "s" {
+				if pre_url == "s" {
 					body, err = server.handleRequest(fields[1], "Sec"+fields[2], s, r, &result)
 				}
 			} else {
@@ -207,10 +175,6 @@ func (server *Server) nonSecureHandler(w http.ResponseWriter, r *http.Request) {
 	var body []byte
 	if len(fields) >= 2 {
 		body, err = server.handleRequest(fields[0], fields[1], s, r, &result)
-		if fields[0] == "stream" {
-			body, err = server.handleStreamRequest(fields[1], fields[2], s, r, &result, w)
-		}
-
 	} else {
 		err = NewError(ERR_INVALID_PARAM, "invalid url format : "+r.URL.Path)
 	}
@@ -299,21 +263,17 @@ func (server *Server) handleRequest(moduleName string, methodName string, s *Ses
 	bodyBytes := make([]byte, 0, 10)
 	var e error
 	var body map[string]interface{}
-	if moduleName == "upload" || moduleName == "wechat_msg" {
-
-	} else {
-		bodyBytes, e = ioutil.ReadAll(r.Body)
+	bodyBytes, e = ioutil.ReadAll(r.Body)
+	if e != nil {
+		return nil, NewError(ERR_INTERNAL, "read http data error : "+e.Error())
+	}
+	if len(bodyBytes) == 0 {
+		//可能是Get请求
+		body = make(map[string]interface{})
+	} else if server.parseBody {
+		e = json.Unmarshal(bodyBytes, &body)
 		if e != nil {
-			return nil, NewError(ERR_INTERNAL, "read http data error : "+e.Error())
-		}
-		if len(bodyBytes) == 0 {
-			//可能是Get请求
-			body = make(map[string]interface{})
-		} else if server.parseBody {
-			e = json.Unmarshal(bodyBytes, &body)
-			if e != nil {
-				return bodyBytes, NewError(ERR_INVALID_PARAM, "read body error : "+e.Error())
-			}
+			return bodyBytes, NewError(ERR_INVALID_PARAM, "read body error : "+e.Error())
 		}
 	}
 	var values []reflect.Value
@@ -322,53 +282,6 @@ func (server *Server) handleRequest(moduleName string, methodName string, s *Ses
 		method := reflect.ValueOf(module).MethodByName(methodName)
 		if method.IsValid() {
 			values = method.Call([]reflect.Value{reflect.ValueOf(&HttpRequest{body, bodyBytes, r, s}), reflect.ValueOf(result)})
-		} else {
-			method = reflect.ValueOf(server.modules["default"]).MethodByName("ErrorMethod")
-			values = method.Call([]reflect.Value{reflect.ValueOf(&HttpRequest{body, bodyBytes, r, s}), reflect.ValueOf(result)})
-		}
-	} else {
-		method := reflect.ValueOf(server.modules["default"]).MethodByName("ErrorModule")
-		values = method.Call([]reflect.Value{reflect.ValueOf(&HttpRequest{body, bodyBytes, r, s}), reflect.ValueOf(result)})
-	}
-	if len(values) != 1 {
-		return bodyBytes, NewError(ERR_INTERNAL, fmt.Sprintf("method %s.%s return value is not 2.", moduleName, methodName))
-	}
-	switch x := values[0].Interface().(type) {
-	case nil:
-		return bodyBytes, nil
-	default:
-		return bodyBytes, x.(error)
-	}
-}
-
-//处理下载较大文件流的请求
-func (server *Server) handleStreamRequest(moduleName string, methodName string, s *Session, r *http.Request, result *Result, w http.ResponseWriter) ([]byte, error) {
-	bodyBytes := make([]byte, 0, 10)
-	var e error
-	var body map[string]interface{}
-	if moduleName == "upload" || moduleName == "wechat_msg" {
-
-	} else {
-		bodyBytes, e = ioutil.ReadAll(r.Body)
-		if e != nil {
-			return nil, NewError(ERR_INTERNAL, "read http data error : "+e.Error())
-		}
-		if len(bodyBytes) == 0 {
-			//可能是Get请求
-			body = make(map[string]interface{})
-		} else if server.parseBody {
-			e = json.Unmarshal(bodyBytes, &body)
-			if e != nil {
-				return bodyBytes, NewError(ERR_INVALID_PARAM, "read body error : "+e.Error())
-			}
-		}
-	}
-	var values []reflect.Value
-	module, ok := server.modules[moduleName]
-	if ok {
-		method := reflect.ValueOf(module).MethodByName(methodName)
-		if method.IsValid() {
-			values = method.Call([]reflect.Value{reflect.ValueOf(&HttpRequest{body, bodyBytes, r, s}), reflect.ValueOf(result), reflect.ValueOf(w)})
 		} else {
 			method = reflect.ValueOf(server.modules["default"]).MethodByName("ErrorMethod")
 			values = method.Call([]reflect.Value{reflect.ValueOf(&HttpRequest{body, bodyBytes, r, s}), reflect.ValueOf(result)})

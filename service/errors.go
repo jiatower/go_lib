@@ -54,19 +54,10 @@ const (
 	ERR_LIMIT_USER            = 2028 //超过人数上线
 
 	ERR_BINDDEV_INVALID = 90001 //绑定设备不可用
-	ERR_NOT_BIND_DEV    = 90002 //该设备未绑定到集群
 	ERR_AUTH_TIMEOUT    = 90004 //第三方授权失效
 	ERR_UPDATE_SID      = 90005 //网络环境变化，需要更换通信sid
 	ERR_USER_REBIND     = 90006 //用户绑定时间改变
 	ERR_TOO_MANY_DEVICE = 90007 //用用户设备绑定太多
-
-	ERR_STORAGE_MAC_NOT_FOUND           = 95001 //mac不存在获取为获取到对应key
-	ERR_STORAGE_KEY_NOT_UNIQUE          = 95002 //-获取多个KEY，需要补至8位key.
-	ERR_STORAGE_NOT_WAIT_ACTIVE_STATE   = 95003 //魔盒非待激活状态（未注册，已激活等）
-	ERR_STORAGE_ACTIVE_ERROR            = 95004 //魔盒联系失败（不在线，通知失败）
-	ERR_STORAGE_NOT_REG                 = 95005 //魔盒未注册
-	ERR_STORAGE_MODEL_CHANNEL_NOT_MATCH = 95006 //激活渠道和用户魔盒类型不匹配
-	ERR_STORAGE_DELETED                 = 95007 //存储已被删除
 
 	//小程序相关错误码
 	ERR_WECHAT_USER_LIMIT     = 96001 // 微信成员超限制
@@ -74,15 +65,6 @@ const (
 	ERR_WECHAT_ALBUM_INFO     = 96003 // 从servApp获取影集信息失败
 	ERR_WECHAT_UPLOAD_FAIL    = 96004 // 文件上传失败
 	ERR_WECHAT_API_FAIL       = 96005 // 文件上传失败
-
-	//cbc错误码
-	ERR_CBC_NOT_START_ORI        = 40001 //第一批开始时间
-	ERR_CBC_NOT_START_REGULAR    = 40002 //第二批开始时间
-	ERR_CBC_NO_PRIVILEDGE        = 40003 //没有挖币权限
-	ERR_CBC_CALL_NODEJS          = 40004 //调用nodejs失败/返回值异常
-	ERR_CBC_OUT_OF_TIMES         = 40005 //提币到钱包app，距离上次提币时间间隔不足
-	ERR_CBC_EMPTY_ONEKEY_ADDRESS = 40006 //一键提币地址为空
-	ERR_CBC_FORBIDDEN            = 40099 //禁止挖币
 
 	ERR_POP_NOTIFY = 10001 //特殊错误码，需要解析desc字段，并做弹窗处理
 

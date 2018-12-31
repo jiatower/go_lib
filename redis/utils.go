@@ -1,6 +1,6 @@
 package redis
 
-import redigo "github.com/garyburd/redigo/redis"
+import redigo "github.com/gomodule/redigo/redis"
 
 func Values(reply interface{}, err error) ([]interface{}, error) {
 	return redigo.Values(reply, err)

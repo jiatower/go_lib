@@ -3,9 +3,9 @@ package service
 import (
 	"errors"
 	"net/http"
-	"yh_pkg/log"
-	"yh_pkg/utils"
-	"yunhui/yh_service/cls/common"
+
+	"github.com/jiatower/go_lib/log"
+	"github.com/jiatower/go_lib/utils"
 )
 
 type Env struct {
@@ -14,17 +14,8 @@ type Env struct {
 }
 
 type Session struct {
-	AppId        string
-	AppUid       string
-	Devid        string
-	Uid          uint32
-	Sid          string
-	Cluster      string
-	IsAdmin      bool
-	IsSuperAdmin bool
-	Ip           string
-	BindTm       int64
-	Channel      string
+	Uid uint32
+	Sid string
 }
 
 func NewEnv(data interface{}) *Env {
@@ -32,12 +23,11 @@ func NewEnv(data interface{}) *Env {
 }
 
 type Config struct {
-	IpPort           string
-	LogDir           string
-	LogLevel         string
-	GetEnv           func(module string) *Env
-	IsValidUser      func(r *http.Request) (s *Session, e error)            //如果不是合法用户，需要返回""
-	CheckClusterUser func(r *http.Request, s *Session) (isOk bool, e error) //验证用户在该集群是否合法
+	IpPort      string
+	LogDir      string
+	LogLevel    string
+	GetEnv      func(module string) *Env
+	IsValidUser func(r *http.Request) (s *Session, e error) //如果不是合法用户，需要返回""
 }
 
 type Result struct {
@@ -105,20 +95,6 @@ func (r *Result) GetUint32(key string) (value uint32, found bool, e error) {
 func (r *Result) GetInt64(key string) (value int64, found bool, e error) {
 	v, found := r.Get(key)
 	value, e = utils.ToInt64(v)
-	return
-}
-
-//获取session用户的角色
-func (s *Session) GetUserRole() (user_role string) {
-	if s.AppId == common.STORAGE_APPID && s.AppUid == s.Devid {
-		user_role = common.USER_ROLE_STORAGE
-	} else if s.AppId == common.YH_MANAGER_APPID {
-		user_role = common.USER_ROLE_MANAGER
-	} else if s.AppId == s.AppUid { // appid+appid+storage_id 是否为server_app
-		user_role = common.USER_ROLE_SERVERAPP
-	} else {
-		user_role = common.USER_ROLE_OTHER
-	}
 	return
 }
 
