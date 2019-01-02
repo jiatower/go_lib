@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,22 +13,26 @@ import (
 
 const MAX_PS = 1000
 
-type HttpRequest struct {
-	Body    map[string]interface{}
+//HTTPRequest 封装的Http请求
+type HTTPRequest struct {
+	body    map[string]interface{}
 	BodyRaw []byte
 	request *http.Request
 	Session *Session
 }
 
-func (hr *HttpRequest) GetRequest() *http.Request {
+//GetRequest 获取HTTPRequest对象
+func (hr *HTTPRequest) GetRequest() *http.Request {
 	return hr.request
 }
 
-func (hr *HttpRequest) GetParam(name string) string {
+//GetParam 获取name参数值
+func (hr *HTTPRequest) GetParam(name string) string {
 	return hr.request.URL.Query().Get(name)
 }
 
-func (hr *HttpRequest) IP() string {
+//IP 获取请求者IP地址
+func (hr *HTTPRequest) IP() string {
 	ips := strings.Split(hr.request.Header.Get("X-Forwarded-For"), ",")
 	if len(ips[0]) > 3 {
 		return ips[0]
@@ -37,7 +42,8 @@ func (hr *HttpRequest) IP() string {
 	}
 }
 
-func (hr *HttpRequest) Cookie(name string) (*http.Cookie, error) {
+//GetCookie 获取名称为name的cookie值
+func (hr *HTTPRequest) GetCookie(name string) (*http.Cookie, error) {
 	/*	fmt.Println("getCooike: --" + hr.request.Header.Get("Cookie"))
 		fmt.Println("header---" + utils.ToString(hr.request.Header))
 		fmt.Println(hr.request.Cookies())
@@ -45,42 +51,69 @@ func (hr *HttpRequest) Cookie(name string) (*http.Cookie, error) {
 	return hr.request.Cookie(name)
 }
 
-//获取某cookie的值
-func (hr *HttpRequest) GetCookie(name string) (string, error) {
-	c, e := hr.Cookie(name)
+//GetCookieStr 获取某cookie的值
+func (hr *HTTPRequest) GetCookieStr(name string) (string, error) {
+	c, e := hr.GetCookie(name)
 	if e != nil {
 		return "", e
 	}
 	return c.Value, nil
 }
 
-//获取某cookie的值
-func (hr *HttpRequest) GetAppChannel() string {
-	ch, e := hr.GetCookie("channel")
+//GetAppChannel 获取App的渠道
+func (hr *HTTPRequest) GetAppChannel() string {
+	ch, e := hr.GetCookieStr("channel")
 	if e != nil {
 		ch = "official"
 	}
 	return ch
 }
 
-//检查Body中的字段是否齐全
-func (hr *HttpRequest) EnsureBody(keys ...string) (string, bool) {
+//Body 获得map类型的json body
+func (hr *HTTPRequest) Body() (map[string]interface{}, error) {
+	if hr.body == nil {
+		hr.body = make(map[string]interface{})
+		if e := json.Unmarshal(hr.BodyRaw, &hr.body); e != nil {
+			return nil, NewError(ERR_INVALID_PARAM, "read body error : "+e.Error())
+		}
+	}
+	return hr.body, nil
+}
+
+//EnsureBody 检查Body中的字段是否齐全
+func (hr *HTTPRequest) EnsureBody(keys ...string) (string, bool) {
+	b, e := hr.Body()
+	if e != nil {
+		return "", false
+	}
 	for _, key := range keys {
-		if _, ok := hr.Body[key]; !ok {
+		if _, ok := b[key]; !ok {
 			return key, false
 		}
 	}
 	return "", true
 }
 
-//带默认值的解析
-func (hr *HttpRequest) ParseOpt(params ...interface{}) error {
+//ParseObj 把body解析成为一个对象
+func (hr *HTTPRequest) ParseObj(obj interface{}) error {
+	if obj == nil {
+		return fmt.Errorf("param obj is nil")
+	}
+	return json.Unmarshal(hr.BodyRaw, obj)
+}
+
+//ParseOpt 带默认值的解析
+func (hr *HTTPRequest) ParseOpt(params ...interface{}) error {
 	if len(params)%3 != 0 {
 		return errors.New("params count invalid")
 	}
+	b, e := hr.Body()
+	if e != nil {
+		return e
+	}
 	for i := 0; i < len(params); i += 3 {
 		key := utils.ToString(params[i])
-		v, ok := hr.Body[key]
+		v, ok := b[key]
 		var e error
 		switch ref := params[i+1].(type) {
 		case *string:
@@ -149,7 +182,7 @@ func (hr *HttpRequest) ParseOpt(params ...interface{}) error {
 				case map[string]interface{}:
 					*ref = m
 				default:
-					e = errors.New(fmt.Sprintf("%v is not map[string]iterface{}", key, reflect.TypeOf(v)))
+					e = fmt.Errorf("%v is not map[string]iterface{}, but is %v", key, reflect.TypeOf(v))
 				}
 			} else {
 				*ref = params[i+2].(map[string]interface{})
@@ -161,23 +194,27 @@ func (hr *HttpRequest) ParseOpt(params ...interface{}) error {
 				*ref = params[i+2]
 			}
 		default:
-			return errors.New(fmt.Sprintf("unknown type %v ", key, reflect.TypeOf(ref)))
+			return fmt.Errorf("key [%v] with unknown type %v ", key, reflect.TypeOf(ref))
 		}
 		if e != nil {
-			return errors.New(fmt.Sprintf("parse [%v] error:%v", key, e.Error()))
+			return fmt.Errorf("parse [%v] error:%v", key, e.Error())
 		}
 	}
 	return nil
 }
 
-//不带默认值的解析
-func (hr *HttpRequest) Parse(params ...interface{}) error {
+//Parse 不带默认值的解析
+func (hr *HTTPRequest) Parse(params ...interface{}) error {
 	if len(params)%2 != 0 {
 		return errors.New("params count must be odd")
 	}
+	b, e := hr.Body()
+	if e != nil {
+		return e
+	}
 	for i := 0; i < len(params); i += 2 {
 		key := utils.ToString(params[i])
-		if v, ok := hr.Body[key]; ok {
+		if v, ok := b[key]; ok {
 			var e error
 			switch ref := params[i+1].(type) {
 			case *string:
@@ -216,10 +253,10 @@ func (hr *HttpRequest) Parse(params ...interface{}) error {
 			case *interface{}:
 				*ref = v
 			default:
-				return errors.New(fmt.Sprintf("unknown type %v ", reflect.TypeOf(ref)))
+				return fmt.Errorf("unknown type %v ", reflect.TypeOf(ref))
 			}
 			if e != nil {
-				return errors.New(fmt.Sprintf("parse [%v] error:%v", key, e.Error()))
+				return fmt.Errorf("parse [%v] error:%v", key, e.Error())
 			}
 			if key == "ps" {
 				ps, e := utils.ToUint64(v)
@@ -228,21 +265,21 @@ func (hr *HttpRequest) Parse(params ...interface{}) error {
 				}
 			}
 		} else {
-			return errors.New(fmt.Sprintf("%v not provided", key))
+			return fmt.Errorf("%v not provided", key)
 		}
 	}
 	return nil
 }
 
-//获取Get方式请求的参数
-func (hr *HttpRequest) ParseGet(params ...interface{}) error {
+//ParseGet 获取Get方式请求的参数
+func (hr *HTTPRequest) ParseGet(params ...interface{}) error {
 	if len(params)%2 != 0 {
 		return errors.New("params count must be odd")
 	}
-	url_values := hr.request.URL.Query()
+	urlValues := hr.request.URL.Query()
 	for i := 0; i < len(params); i += 2 {
 		key := utils.ToString(params[i])
-		if v := url_values.Get(key); v != "" {
+		if v := urlValues.Get(key); v != "" {
 			var e error
 			switch ref := params[i+1].(type) {
 			case *string:
@@ -272,10 +309,10 @@ func (hr *HttpRequest) ParseGet(params ...interface{}) error {
 			case *interface{}:
 				*ref = v
 			default:
-				return errors.New(fmt.Sprintf("unknown type %v ", reflect.TypeOf(ref)))
+				return fmt.Errorf("unknown type %v ", reflect.TypeOf(ref))
 			}
 			if e != nil {
-				return errors.New(fmt.Sprintf("parse [%v] error:%v", key, e.Error()))
+				return fmt.Errorf("parse [%v] error:%v", key, e.Error())
 			}
 			if key == "ps" {
 				ps, e := utils.ToUint64(v)
@@ -284,20 +321,21 @@ func (hr *HttpRequest) ParseGet(params ...interface{}) error {
 				}
 			}
 		} else {
-			return errors.New(fmt.Sprintf("%v not provided", key))
+			return fmt.Errorf("%v not provided", key)
 		}
 	}
 	return nil
 }
 
-func (hr *HttpRequest) ParseGetOpt(params ...interface{}) error {
+//ParseGetOpt 带有默认值的参数解析
+func (hr *HTTPRequest) ParseGetOpt(params ...interface{}) error {
 	if len(params)%3 != 0 {
 		return errors.New("params count invalid")
 	}
-	url_values := hr.request.URL.Query()
+	urlValues := hr.request.URL.Query()
 	for i := 0; i < len(params); i += 3 {
 		key := utils.ToString(params[i])
-		v := url_values.Get(key)
+		v := urlValues.Get(key)
 		ok := v == ""
 		var e error
 		switch ref := params[i+1].(type) {
@@ -365,7 +403,7 @@ func (hr *HttpRequest) ParseGetOpt(params ...interface{}) error {
 				*ref = params[i+2].([]string)
 			}
 		case *map[string]interface{}:
-			e = errors.New(fmt.Sprintf("%v is not map[string]iterface{}", key, reflect.TypeOf(v)))
+			e = fmt.Errorf("%v is not map[string]iterface{}, but is %v", key, reflect.TypeOf(v))
 			//	switch m := params[i+1].(type) {
 			//	case map[string]interface{}:
 			//		*ref = m
@@ -382,21 +420,21 @@ func (hr *HttpRequest) ParseGetOpt(params ...interface{}) error {
 				*ref = params[i+2]
 			}
 		default:
-			return errors.New(fmt.Sprintf("unknown type %v ", key, reflect.TypeOf(ref)))
+			return fmt.Errorf("key [%v] unknown type %v ", key, reflect.TypeOf(ref))
 		}
 		if e != nil {
-			return errors.New(fmt.Sprintf("parse [%v] error:%v", key, e.Error()))
+			return fmt.Errorf("parse [%v] error:%v", key, e.Error())
 		}
 	}
 	return nil
 }
 
-//是否是微信客户端返回
-func (hr *HttpRequest) IsWeChatUserAgent() bool {
+//IsWeChatUserAgent 是否是微信客户端返回
+func (hr *HTTPRequest) IsWeChatUserAgent() bool {
 	return strings.Contains(strings.ToLower(hr.request.UserAgent()), "micromessenger")
 }
 
-//是否是微信客户端返回
-func (hr *HttpRequest) IsAliPayUserAgent() bool {
+//IsAliPayUserAgent 是否是微信客户端返回
+func (hr *HTTPRequest) IsAliPayUserAgent() bool {
 	return strings.Contains(strings.ToLower(hr.request.UserAgent()), "alipay")
 }

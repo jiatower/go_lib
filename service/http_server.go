@@ -20,34 +20,32 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/jiatower/go_lib/log"
 )
 
+//Server 服务对象
 type Server struct {
 	modules      map[string]Module
 	sysLog       *log.MLogger
 	conf         *Config
-	parseBody    bool //是否把POST的内容解析为json对象
 	customResult bool //返回结果中是否包含result和tm项
 }
 
+//New 创建新的Server
 func New(conf *Config, args ...bool) (server *Server, err error) {
 	sysLog, err := log.NewMLogger(conf.LogDir+"/system", 10000, conf.LogLevel)
 	if err != nil {
 		return nil, err
 	}
-	server = &Server{make(map[string]Module), sysLog, conf, true, false}
+	server = &Server{make(map[string]Module), sysLog, conf, false}
 	server.AddModule("default", &DefaultModule{})
 	if len(args) >= 1 {
-		server.parseBody = args[0]
-	}
-	if len(args) >= 2 {
 		server.customResult = args[1]
 	}
 	return server, nil
 }
 
+//AddModule 加载模块
 func (server *Server) AddModule(name string, module Module) (err error) {
 	fmt.Printf("add module %s... ", name)
 	mlog, err := log.NewMLogger(server.conf.LogDir+"/"+name, 10000, server.conf.LogLevel)
@@ -67,6 +65,7 @@ func (server *Server) AddModule(name string, module Module) (err error) {
 	return
 }
 
+//StartService 启动服务
 func (server *Server) StartService() error {
 	handler := http.NewServeMux()
 	//用户验证
@@ -119,7 +118,7 @@ func (server *Server) writeBack(r *http.Request, w http.ResponseWriter, reqBody 
 		format += "response:\n%s\n"
 		format += "------------------------------------------------------------------"
 	*/
-	req := &HttpRequest{nil, nil, r, nil}
+	req := &HTTPRequest{nil, nil, r, nil}
 
 	format := " | " + req.IP()
 	format += " | uri: %s"
@@ -139,7 +138,7 @@ func (server *Server) writeBack(r *http.Request, w http.ResponseWriter, reqBody 
 
 func (server *Server) secureHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now().UnixNano()
-	var result Result = NewResult()
+	result := NewResult()
 	var err error
 	s, e := server.conf.IsValidUser(r)
 	var body []byte
@@ -148,8 +147,8 @@ func (server *Server) secureHandler(w http.ResponseWriter, r *http.Request) {
 		if s != nil && s.Uid > 0 {
 			fields := strings.Split(r.URL.Path[1:], "/")
 			if len(fields) >= 3 {
-				pre_url := fields[0]
-				if pre_url == "s" {
+				preURL := fields[0]
+				if preURL == "s" {
 					body, err = server.handleRequest(fields[1], "Sec"+fields[2], s, r, &result)
 				}
 			} else {
@@ -167,7 +166,7 @@ func (server *Server) secureHandler(w http.ResponseWriter, r *http.Request) {
 
 func (server *Server) nonSecureHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now().UnixNano()
-	var result Result = NewResult()
+	result := NewResult()
 	var err error
 
 	s := new(Session)
@@ -270,25 +269,20 @@ func (server *Server) handleRequest(moduleName string, methodName string, s *Ses
 	if len(bodyBytes) == 0 {
 		//可能是Get请求
 		body = make(map[string]interface{})
-	} else if server.parseBody {
-		e = json.Unmarshal(bodyBytes, &body)
-		if e != nil {
-			return bodyBytes, NewError(ERR_INVALID_PARAM, "read body error : "+e.Error())
-		}
 	}
 	var values []reflect.Value
 	module, ok := server.modules[moduleName]
 	if ok {
 		method := reflect.ValueOf(module).MethodByName(methodName)
 		if method.IsValid() {
-			values = method.Call([]reflect.Value{reflect.ValueOf(&HttpRequest{body, bodyBytes, r, s}), reflect.ValueOf(result)})
+			values = method.Call([]reflect.Value{reflect.ValueOf(&HTTPRequest{body, bodyBytes, r, s}), reflect.ValueOf(result)})
 		} else {
 			method = reflect.ValueOf(server.modules["default"]).MethodByName("ErrorMethod")
-			values = method.Call([]reflect.Value{reflect.ValueOf(&HttpRequest{body, bodyBytes, r, s}), reflect.ValueOf(result)})
+			values = method.Call([]reflect.Value{reflect.ValueOf(&HTTPRequest{body, bodyBytes, r, s}), reflect.ValueOf(result)})
 		}
 	} else {
 		method := reflect.ValueOf(server.modules["default"]).MethodByName("ErrorModule")
-		values = method.Call([]reflect.Value{reflect.ValueOf(&HttpRequest{body, bodyBytes, r, s}), reflect.ValueOf(result)})
+		values = method.Call([]reflect.Value{reflect.ValueOf(&HTTPRequest{body, bodyBytes, r, s}), reflect.ValueOf(result)})
 	}
 	if len(values) != 1 {
 		return bodyBytes, NewError(ERR_INTERNAL, fmt.Sprintf("method %s.%s return value is not 2.", moduleName, methodName))
