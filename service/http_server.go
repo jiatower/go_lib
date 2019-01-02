@@ -72,13 +72,13 @@ func (server *Server) StartService() error {
 	handler.HandleFunc("/s/", server.secureHandler)
 	handler.HandleFunc("/", server.nonSecureHandler)
 	s := &http.Server{
-		Addr:           server.conf.IpPort,
+		Addr:           server.conf.IPPort,
 		Handler:        handler,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 0,
 	}
-	l := fmt.Sprint("service start at ", server.conf.IpPort, " ...")
+	l := fmt.Sprint("service start at ", server.conf.IPPort, " ...")
 	server.sysLog.Append(l, log.NOTICE)
 	fmt.Println(l)
 	return s.ListenAndServe()
