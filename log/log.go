@@ -61,11 +61,18 @@ func New(file string, bufferSize int, level int) (l *Logger, err error) {
 	l.fileName = file
 	l.cron = false
 
-	l.file, err = os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		return nil, err
+	if file == "" {
+		l.file = nil
+		l.handler = log.New(os.Stdout, "", log.LstdFlags)
+
+	} else {
+		l.file, err = os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			return nil, err
+		}
+		l.handler = log.New(l.file, "", log.LstdFlags)
+
 	}
-	l.handler = log.New(l.file, "", log.LstdFlags)
 	//l.handler = log.New(l.file, "", log.LstdFlags|log.Lshortfile)
 	l.logChan = make(chan Log, bufferSize)
 	go l.write()
@@ -114,6 +121,9 @@ func (l *Logger) AppendObj(err error, args ...interface{}) {
 
 //检查是否需要滚动日志
 func (l *Logger) checkCronlog() {
+	if l.file == nil {
+		return
+	}
 	for {
 		if _, err := os.Open(l.fileName); l.cron == false && os.IsNotExist(err) {
 			l.cron = true
@@ -124,7 +134,7 @@ func (l *Logger) checkCronlog() {
 
 func (l *Logger) write() {
 	for v := range l.logChan {
-		if l.cron {
+		if l.cron && l.file != nil {
 			l.file.Close()
 			var err error
 			l.file, err = os.OpenFile(l.fileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
@@ -136,7 +146,9 @@ func (l *Logger) write() {
 		}
 		l.handler.Println("[", levelStr[v.level], "] ", v.content)
 	}
-	l.file.Close()
+	if l.file != nil {
+		l.file.Close()
+	}
 }
 
 func LevelToString(level int) string {

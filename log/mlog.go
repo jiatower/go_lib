@@ -1,9 +1,12 @@
 package log
 
-import "errors"
+import (
+	"errors"
+)
 
 type MLogger []*Logger
 
+//NewMLogger 创建新的日志对象，如果prefix==""则输出到标准输出
 func NewMLogger(prefix string, bufferSize int, level string) (l *MLogger, err error) {
 	levelInt, ok := levelStrMap[level]
 	if !ok {
@@ -15,8 +18,12 @@ func NewMLogger(prefix string, bufferSize int, level string) (l *MLogger, err er
 	}
 	mlog := make(MLogger, levelInt+1)
 	l = &mlog
-	for i, _ := range mlog {
-		mlog[i], err = New(prefix+"."+levelSStr[i]+".log", bufferSize, i)
+	for i := range mlog {
+		if prefix == "" {
+			mlog[i], err = New("", bufferSize, i)
+		} else {
+			mlog[i], err = New(prefix+"."+levelSStr[i]+".log", bufferSize, i)
+		}
 		if err != nil {
 			return nil, err
 		}
