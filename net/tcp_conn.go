@@ -4,7 +4,8 @@ import (
 	"net"
 	"strings"
 	"time"
-	tm "yh_pkg/time"
+
+	tm "github.com/jiatower/go_lib/time"
 )
 
 type TCPConn struct {

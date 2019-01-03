@@ -41,12 +41,11 @@ type Result struct {
 	Detail string      `json:"detail"`
 	Code   uint        `json:"code"`
 	Res    interface{} `json:"res"`
-	Unread interface{} `json:"unread"`
 }
 
 //NewResult 创建默认的Result对象
 func NewResult() Result {
-	return Result{"ok", "", "", ERR_NOERR, map[string]interface{}{}, map[string]interface{}{}}
+	return Result{"ok", "", "", ERR_NOERR, map[string]interface{}{}}
 }
 
 //Set 设置Result的某一项值

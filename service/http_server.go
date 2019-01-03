@@ -85,7 +85,7 @@ func (server *Server) StartService() error {
 }
 
 func (server *Server) writeBackErr(r *http.Request, w http.ResponseWriter, reqBody []byte, err Error, duration int64, req_res interface{}) {
-	var result = Result{"fail", err.Show, err.Desc, err.Code, req_res, map[string]interface{}{}}
+	var result = Result{"fail", err.Show, err.Desc, err.Code, req_res}
 	res, _ := json.Marshal(result)
 	server.writeBack(r, w, reqBody, res, false, duration)
 }
