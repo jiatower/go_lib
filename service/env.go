@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/jiatower/go_lib/log"
@@ -46,6 +47,10 @@ type Result struct {
 //NewResult 创建默认的Result对象
 func NewResult() Result {
 	return Result{"ok", "", "", ERR_NOERR, map[string]interface{}{}}
+}
+
+func (r *Result) String() string {
+	return fmt.Sprintf("status=%s, code=%d, detail=%s, msg=%s, res=%v", r.Status, r.Code, r.Detail, r.Msg, r.Res)
 }
 
 //Set 设置Result的某一项值
@@ -117,4 +122,13 @@ func (r *Result) CheckIsOk() (ok bool) {
 		return true
 	}
 	return false
+}
+
+//ToError 把result转换成error，如果返回结果没有错误，返回nil
+func (r *Result) ToError() (e error) {
+	if r.CheckIsOk() {
+		return nil
+	} else {
+		return errors.New(r.String())
+	}
 }
